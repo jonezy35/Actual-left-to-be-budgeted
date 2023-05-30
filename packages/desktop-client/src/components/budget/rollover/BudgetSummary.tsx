@@ -125,6 +125,17 @@ function TotalsList({ prevMonthName, collapsed }: TotalsListProps) {
           }}
           style={[{ fontWeight: 600 }, styles.tnum]}
         />
+        {/* This is a filler for me (jonezy35) to add in the left to budget feature once it's implemented in the backend
+        <CellValue
+          binding={rolloverBudget.leftToBudget}
+          formatter={value => {
+            let n = parseInt(value) || 0;
+            let v = format(Math.abs(n), 'financial');
+            return n >= 0 ? '-' + v : '+' + v;
+          }}
+          style={[{ fontWeight: 600 }, styles.tnum]}
+        />
+        */}
       </View>
 
       <View>
