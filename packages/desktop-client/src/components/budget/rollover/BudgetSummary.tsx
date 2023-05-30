@@ -132,6 +132,7 @@ function TotalsList({ prevMonthName, collapsed }: TotalsListProps) {
         <Block>Overspent in {prevMonthName}</Block>
         <Block>Budgeted</Block>
         <Block>For Next Month</Block>
+        <Block>Left To Budget</Block>
       </View>
     </View>
   );
