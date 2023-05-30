@@ -157,6 +157,7 @@ export const rolloverBudget = {
   forNextMonth: 'buffered',
   totalBudgeted: 'total-budgeted',
   toBudget: 'to-budget',
+  leftToBudget: 'left-to-budget',  //Added this in for me (jonezy35) to fill in the left-to-budget amount once it's supported in the spreadsheet
 
   fromLastMonth: 'from-last-month',
   totalIncome: 'total-income',
