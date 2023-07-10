@@ -10,7 +10,6 @@ import React, {
 import { useDispatch, useSelector } from 'react-redux';
 
 import { format as formatDate, parseISO } from 'date-fns';
-import { css } from 'glamor';
 
 import { pushModal } from 'loot-core/src/client/actions/modals';
 import { initiallyLoadPayees } from 'loot-core/src/client/actions/queries';
@@ -32,7 +31,15 @@ import useSelected, {
 import ArrowRight from '../icons/v0/RightArrow2';
 import { colors } from '../style';
 
-import { View, Text, Button, Stack, ExternalLink, Input } from './common';
+import {
+  View,
+  Text,
+  Button,
+  Stack,
+  ExternalLink,
+  Input,
+  LinkButton,
+} from './common';
 import {
   SelectCell,
   Row,
@@ -179,18 +186,9 @@ export function Value({
         {numHidden > 0 && (
           <Text style={{ color: colors.p4 }}>
             &nbsp;&nbsp;
-            {/* eslint-disable-next-line jsx-a11y/anchor-is-valid */}
-            <a
-              href="#"
-              onClick={onExpand}
-              {...css({
-                color: colors.p4,
-                textDecoration: 'none',
-                ':hover': { textDecoration: 'underline' },
-              })}
-            >
+            <LinkButton onClick={onExpand} style={{ color: colors.p4 }}>
               {numHidden} more items...
-            </a>
+            </LinkButton>
             {!inline && <br />}
           </Text>
         )}
@@ -210,13 +208,14 @@ export function Value({
   }
 }
 
-export function ConditionExpression({
+function ConditionExpression({
   field,
   op,
   value,
   options,
   prefix,
   style,
+  inline,
 }) {
   return (
     <View
@@ -237,7 +236,7 @@ export function ConditionExpression({
       {prefix && <Text style={{ color: colors.n3 }}>{prefix} </Text>}
       <Text style={{ color: colors.p4 }}>{mapField(field, options)}</Text>{' '}
       <Text style={{ color: colors.n3 }}>{friendlyOp(op)}</Text>{' '}
-      <Value value={value} field={field} />
+      <Value value={value} field={field} inline={inline} />
     </View>
   );
 }
@@ -265,7 +264,7 @@ function ScheduleValue({ value }) {
   );
 }
 
-export function ActionExpression({ field, op, value, options, style }) {
+function ActionExpression({ field, op, value, options, style }) {
   return (
     <View
       style={[
@@ -364,6 +363,7 @@ let Rule = memo(
                   key={i}
                   field={cond.field}
                   op={cond.op}
+                  inline={true}
                   value={cond.value}
                   options={cond.options}
                   prefix={i > 0 ? friendlyOp(rule.conditionsOp) : null}
@@ -758,9 +758,8 @@ function ManageRulesContent({ isModal, payeeId, setLoading }) {
             <Text>
               Rules are always run in the order that you see them.{' '}
               <ExternalLink
-                asAnchor={true}
-                href="https://actualbudget.github.io/docs/Budgeting/rules/"
-                style={{ color: colors.n4 }}
+                to="https://actualbudget.org/docs/budgeting/rules/"
+                linkColor="muted"
               >
                 Learn more
               </ExternalLink>

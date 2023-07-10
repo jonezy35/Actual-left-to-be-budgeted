@@ -1,5 +1,6 @@
+import { v4 as uuidv4 } from 'uuid';
+
 import { captureException, captureBreadcrumb } from '../../exceptions';
-import * as uuid from '../../uuid';
 import * as undo from '../undo';
 
 import type * as T from '.';
@@ -116,7 +117,7 @@ function connectWorker(worker, onOpen, onError) {
 
       if (msg.message && msg.message.includes('indexeddb-quota-error')) {
         alert(
-          'We hit a limit on the local storage available. Edits may not be saved. Please get in touch https://actualbudget.github.io/docs/Contact/ so we can help debug this.',
+          'We hit a limit on the local storage available. Edits may not be saved. Please get in touch https://actualbudget.org/contact/ so we can help debug this.',
         );
       }
     } else if (msg.type === 'capture-breadcrumb') {
@@ -147,21 +148,21 @@ export const send: T.Send = function (
   { catchErrors = false } = {},
 ) {
   return new Promise((resolve, reject) => {
-    uuid.v4().then(id => {
-      replyHandlers.set(id, { resolve, reject });
-      let message = {
-        id,
-        name,
-        args,
-        undoTag: undo.snapshot(),
-        catchErrors,
-      };
-      if (messageQueue) {
-        messageQueue.push(message);
-      } else {
-        globalWorker.postMessage(message);
-      }
-    });
+    let id = uuidv4();
+
+    replyHandlers.set(id, { resolve, reject });
+    let message = {
+      id,
+      name,
+      args,
+      undoTag: undo.snapshot(),
+      catchErrors,
+    };
+    if (messageQueue) {
+      messageQueue.push(message);
+    } else {
+      globalWorker.postMessage(message);
+    }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   }) as any;
 };
@@ -187,4 +188,8 @@ export const listen: T.Listen = function (name, cb) {
 
 export const unlisten: T.Unlisten = function (name) {
   listeners.set(name, []);
+};
+
+export const clearServer: T.ClearServer = async function () {
+  //
 };

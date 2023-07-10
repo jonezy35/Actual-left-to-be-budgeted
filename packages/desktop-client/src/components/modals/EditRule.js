@@ -30,7 +30,6 @@ import AddIcon from '../../icons/v0/Add';
 import SubtractIcon from '../../icons/v0/Subtract';
 import InformationOutline from '../../icons/v1/InformationOutline';
 import { colors } from '../../style';
-import SimpleTransactionsTable from '../accounts/SimpleTransactionsTable';
 import {
   View,
   Text,
@@ -41,6 +40,7 @@ import {
   Tooltip,
 } from '../common';
 import { StatusBadge } from '../schedules/StatusBadge';
+import SimpleTransactionsTable from '../transactions/SimpleTransactionsTable';
 import { BetweenAmountInput } from '../util/AmountInput';
 import DisplayId from '../util/DisplayId';
 import GenericInput from '../util/GenericInput';
@@ -175,7 +175,7 @@ function Editor({ error, style, children }) {
   );
 }
 
-export function ConditionEditor({
+function ConditionEditor({
   ops,
   condition,
   editorStyle,
@@ -402,7 +402,7 @@ function newInput(item) {
   return { ...item, inputKey: '' + Math.random() };
 }
 
-export function ConditionsList({
+function ConditionsList({
   conditionsOp,
   conditions,
   editorStyle,
@@ -581,7 +581,6 @@ let conditionFields = [
   ]);
 
 export default function EditRule({
-  history,
   modalProps,
   defaultRule,
   onSave: originalOnSave,

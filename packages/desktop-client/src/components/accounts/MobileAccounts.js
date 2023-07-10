@@ -1,19 +1,17 @@
 import React, { Component, useEffect, useState } from 'react';
 import { connect } from 'react-redux';
-import { useNavigate } from 'react-router-dom-v5-compat';
+import { useNavigate } from 'react-router-dom';
 
 import * as actions from 'loot-core/src/client/actions';
 import * as queries from 'loot-core/src/client/queries';
-import { prettyAccountType } from 'loot-core/src/shared/accounts';
 
-import Wallet from '../../icons/v1/Wallet';
 import { colors, styles } from '../../style';
 import { withThemeColor } from '../../util/withThemeColor';
 import { Button, Text, TextOneLine, View } from '../common';
 import { Page } from '../Page';
 import CellValue from '../spreadsheet/CellValue';
 
-export function AccountHeader({ name, amount }) {
+function AccountHeader({ name, amount }) {
   return (
     <View
       style={{
@@ -42,7 +40,7 @@ export function AccountHeader({ name, amount }) {
   );
 }
 
-export function AccountCard({ account, updated, getBalanceQuery, onSelect }) {
+function AccountCard({ account, updated, getBalanceQuery, onSelect }) {
   return (
     <View
       style={{
@@ -69,8 +67,7 @@ export function AccountCard({ account, updated, getBalanceQuery, onSelect }) {
         <View
           style={{
             flex: '1 auto',
-            height: 52,
-            marginTop: 10,
+            margin: '10px 0',
           }}
         >
           <View
@@ -103,26 +100,6 @@ export function AccountCard({ account, updated, getBalanceQuery, onSelect }) {
                 }}
               />
             )}
-          </View>
-          <View
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              marginTop: '4px',
-            }}
-          >
-            <Text style={[styles.smallText, { color: colors.n5 }]}>
-              {prettyAccountType(account.type)}
-            </Text>
-            <Wallet
-              style={{
-                width: 15,
-                height: 15,
-                color: colors.n9,
-                marginLeft: 8,
-                marginBottom: 2,
-              }}
-            />
           </View>
         </View>
         <CellValue
@@ -164,7 +141,7 @@ function EmptyMessage({ onAdd }) {
   );
 }
 
-export class AccountList extends Component {
+class AccountList extends Component {
   isNewTransaction = id => {
     return this.props.newTransactions.includes(id);
   };

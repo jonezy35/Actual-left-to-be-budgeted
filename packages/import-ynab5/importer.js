@@ -3,7 +3,7 @@
 // case and ignore everything else; otherwise we'd be pulling in the
 // entire backend bundle from the API
 import * as actual from '@actual-app/api/methods';
-import uuid from 'uuid';
+import { v4 as uuidv4 } from 'uuid';
 
 function amountFromYnab(amount) {
   // ynabs multiplies amount by 1000 and actual by 100
@@ -14,25 +14,6 @@ function amountFromYnab(amount) {
 function monthFromDate(date) {
   let parts = date.split('-');
   return parts[0] + '-' + parts[1];
-}
-
-function mapAccountType(type) {
-  switch (type) {
-    case 'cash':
-    case 'checking':
-      return 'checking';
-    case 'creditCard':
-    case 'lineOfCredit':
-      return 'credit';
-    case 'savings':
-      return 'savings';
-    case 'investmentAccount':
-      return 'investment';
-    case 'mortgage':
-      return 'mortgage';
-    default:
-      return 'other';
-  }
 }
 
 function sortByKey(arr, key) {
@@ -62,7 +43,6 @@ function importAccounts(data, entityIdMap) {
     data.accounts.map(async account => {
       if (!account.deleted) {
         let id = await actual.createAccount({
-          type: mapAccountType(account.type),
           name: account.name,
           offbudget: account.on_budget ? false : true,
           closed: account.closed,
@@ -182,7 +162,10 @@ async function importTransactions(data, entityIdMap) {
   // Go ahead and generate ids for all of the transactions so we can
   // reliably resolve transfers
   for (let transaction of data.transactions) {
-    entityIdMap.set(transaction.id, uuid.v4());
+    entityIdMap.set(transaction.id, uuidv4());
+  }
+  for (let transaction of data.subtransactions) {
+    entityIdMap.set(transaction.id, uuidv4());
   }
 
   await Promise.all(
@@ -200,6 +183,7 @@ async function importTransactions(data, entityIdMap) {
           if (subtransactions) {
             subtransactions = subtransactions.map(subtrans => {
               return {
+                id: entityIdMap.get(subtrans.id),
                 amount: amountFromYnab(subtrans.amount),
                 category: entityIdMap.get(subtrans.category_id) || null,
                 notes: subtrans.memo,

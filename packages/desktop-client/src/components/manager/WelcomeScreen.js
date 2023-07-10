@@ -26,19 +26,18 @@ function WelcomeScreen({ createBudget, pushModal }) {
           top of that, we want to provide powerful tools to allow you to do
           whatever you want with your data.
         </P>
-        <P style={{ '& a, & a:visited': { color: colors.p5 } }}>
+        <P>
           Currently, Actual implements budgeting based on a{' '}
           <ExternalLink
-            asAnchor
-            style={{ color: colors.p5 }}
-            href="https://actualbudget.github.io/docs/Budgeting/howitworks"
+            to="https://actualbudget.org/docs/budgeting/"
+            linkColor="purple"
           >
             monthly envelope system
           </ExternalLink>
           . Consider taking our{' '}
           <ExternalLink
-            asAnchor
-            href="https://actualbudget.github.io/docs/Getting-Started/using-actual/"
+            to="https://actualbudget.org/docs/tour/"
+            linkColor="purple"
           >
             guided tour
           </ExternalLink>{' '}

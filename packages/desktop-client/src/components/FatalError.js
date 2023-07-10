@@ -2,7 +2,17 @@ import React, { Component, useState } from 'react';
 
 import { colors } from '../style';
 
-import { View, Stack, Text, Block, Modal, P, Link, Button } from './common';
+import {
+  View,
+  Stack,
+  Text,
+  Block,
+  Modal,
+  P,
+  LinkButton,
+  Button,
+  ExternalLink,
+} from './common';
 import { Checkbox } from './forms';
 
 class FatalError extends Component {
@@ -28,9 +38,12 @@ class FatalError extends Component {
           function properly. If you’re seeing this error, either your browser
           does not support <code>SharedArrayBuffer</code>, or your server is not
           sending the appropriate headers, or you are not using HTTPS. See{' '}
-          <a href="https://actualbudget.github.io/docs/Troubleshooting/SharedArrayBuffer">
+          <ExternalLink
+            linkColor="muted"
+            to="https://actualbudget.org/docs/troubleshooting/shared-array-buffer"
+          >
             our troubleshooting documentation
-          </a>{' '}
+          </ExternalLink>{' '}
           to learn more. <SharedArrayBufferOverride />
         </Text>
       );
@@ -42,9 +55,12 @@ class FatalError extends Component {
         <Text>
           There was a problem loading the app in this browser version. If this
           continues to be a problem, you can{' '}
-          <a href="https://github.com/actualbudget/releases">
+          <ExternalLink
+            linkColor="muted"
+            to="https://github.com/actualbudget/releases"
+          >
             download the desktop app
-          </a>
+          </ExternalLink>
           .
         </Text>
       );
@@ -65,13 +81,17 @@ class FatalError extends Component {
             color: colors.r4,
             lineHeight: '1.5em',
             fontSize: 15,
-            '& a': { color: colors.r4 },
           }}
         >
           <Text>{msg}</Text>
           <Text>
             Please get{' '}
-            <a href="https://actualbudget.github.io/docs/Contact">in touch</a>{' '}
+            <ExternalLink
+              linkColor="muted"
+              to="https://actualbudget.org/contact"
+            >
+              in touch
+            </ExternalLink>{' '}
             for support
           </Text>
         </Stack>
@@ -94,12 +114,9 @@ class FatalError extends Component {
             <P>There was an unrecoverable error in the UI. Sorry!</P>
             <P>
               If this error persists, please get{' '}
-              <a
-                href="https://actualbudget.github.io/docs/Contact"
-                style={{ color: colors.p4 }}
-              >
+              <ExternalLink to="https://actualbudget.org/contact">
                 in touch
-              </a>{' '}
+              </ExternalLink>{' '}
               so it can be investigated.
             </P>
             <P>
@@ -108,12 +125,12 @@ class FatalError extends Component {
               </Button>
             </P>
             <P isLast={true} style={{ fontSize: 11 }}>
-              <Link
+              <LinkButton
                 onClick={() => this.setState({ showError: true })}
                 style={{ color: colors.p4 }}
               >
                 Show Error
-              </Link>
+              </LinkButton>
               {showError && (
                 <Block
                   style={{
@@ -164,7 +181,7 @@ function SharedArrayBufferOverride() {
       </Button>
     </>
   ) : (
-    <Link
+    <LinkButton
       onClick={() => setExpanded(true)}
       style={{
         color: `inherit !important`,
@@ -179,6 +196,6 @@ function SharedArrayBufferOverride() {
       }}
     >
       Advanced options
-    </Link>
+    </LinkButton>
   );
 }

@@ -1,6 +1,6 @@
+import { v4 as uuidv4 } from 'uuid';
+
 import * as asyncStorage from '../../platform/server/asyncStorage';
-import * as uuid from '../../platform/uuid';
-import { fromPlaidAccountType } from '../../shared/accounts';
 import { amountToInteger } from '../../shared/util';
 import * as db from '../db';
 import { runMutator } from '../mutators';
@@ -19,7 +19,7 @@ export async function handoffPublicToken(institution, publicToken) {
     throw new Error('Invalid institution object');
   }
 
-  let id = uuid.v4Sync();
+  let id = uuidv4();
 
   // Make sure to generate an access token first before inserting it
   // into our local database in case it fails
@@ -52,7 +52,7 @@ export async function findOrCreateBank(institution, requisitionId) {
   }
 
   const bankData = {
-    id: uuid.v4Sync(),
+    id: uuidv4(),
     bank_id: requisitionId,
     name: institution.name,
   };
@@ -81,7 +81,6 @@ export async function addAccounts(bankId, accountIds, offbudgetIds = []) {
           account_id: acct.account_id,
           name: acct.name,
           official_name: acct.official_name,
-          type: fromPlaidAccountType(acct.type),
           balance_current: amountToInteger(acct.balances.current),
           mask: acct.mask,
           bank: bankId,
@@ -128,7 +127,6 @@ export async function addNordigenAccounts(
           account_id: acct.account_id,
           name: acct.name,
           official_name: acct.official_name,
-          type: fromPlaidAccountType(acct.type),
           balance_current: amountToInteger(acct.balances.current),
           mask: acct.mask,
           bank: bankId,

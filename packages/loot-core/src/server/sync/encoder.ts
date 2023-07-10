@@ -1,8 +1,10 @@
+import { Timestamp, SyncProtoBuf } from '@actual-app/crdt';
+
 import * as encryption from '../encryption';
 import { SyncError } from '../errors';
 import * as prefs from '../prefs';
 
-import * as SyncPb from './proto/sync_pb';
+import { Message } from './index';
 
 function coerceBuffer(value) {
   // The web encryption APIs give us back raw Uint8Array... but our
@@ -15,24 +17,29 @@ function coerceBuffer(value) {
   return value;
 }
 
-export async function encode(groupId, fileId, since, messages) {
+export async function encode(
+  groupId: string,
+  fileId: string,
+  since: Timestamp,
+  messages: Message[],
+): Promise<Uint8Array> {
   let { encryptKeyId } = prefs.getPrefs();
-  let requestPb = new SyncPb.SyncRequest();
+  let requestPb = new SyncProtoBuf.SyncRequest();
 
   for (let i = 0; i < messages.length; i++) {
     let msg = messages[i];
-    let envelopePb = new SyncPb.MessageEnvelope();
-    envelopePb.setTimestamp(msg.timestamp);
+    let envelopePb = new SyncProtoBuf.MessageEnvelope();
+    envelopePb.setTimestamp(msg.timestamp.toString());
 
-    let messagePb = new SyncPb.Message();
+    let messagePb = new SyncProtoBuf.Message();
     messagePb.setDataset(msg.dataset);
     messagePb.setRow(msg.row);
     messagePb.setColumn(msg.column);
-    messagePb.setValue(msg.value);
+    messagePb.setValue(msg.value as string);
     let binaryMsg = messagePb.serializeBinary();
 
     if (encryptKeyId) {
-      let encrypted = new SyncPb.EncryptedData();
+      let encrypted = new SyncProtoBuf.EncryptedData();
 
       let result;
       try {
@@ -59,27 +66,29 @@ export async function encode(groupId, fileId, since, messages) {
   requestPb.setGroupid(groupId);
   requestPb.setFileid(fileId);
   requestPb.setKeyid(encryptKeyId);
-  requestPb.setSince(since);
+  requestPb.setSince(since.toString());
 
   return requestPb.serializeBinary();
 }
 
-export async function decode(data) {
+export async function decode(
+  data: Uint8Array,
+): Promise<{ messages: Message[]; merkle: { hash: number } }> {
   let { encryptKeyId } = prefs.getPrefs();
 
-  let responsePb = SyncPb.SyncResponse.deserializeBinary(data);
+  let responsePb = SyncProtoBuf.SyncResponse.deserializeBinary(data);
   let merkle = JSON.parse(responsePb.getMerkle());
   let list = responsePb.getMessagesList();
   let messages = [];
 
   for (let i = 0; i < list.length; i++) {
     let envelopePb = list[i];
-    let timestamp = envelopePb.getTimestamp();
+    let timestamp = Timestamp.parse(envelopePb.getTimestamp());
     let encrypted = envelopePb.getIsencrypted();
     let msg;
 
     if (encrypted) {
-      let binary = SyncPb.EncryptedData.deserializeBinary(
+      let binary = SyncProtoBuf.EncryptedData.deserializeBinary(
         envelopePb.getContent() as Uint8Array,
       );
 
@@ -98,9 +107,9 @@ export async function decode(data) {
         });
       }
 
-      msg = SyncPb.Message.deserializeBinary(decrypted);
+      msg = SyncProtoBuf.Message.deserializeBinary(decrypted);
     } else {
-      msg = SyncPb.Message.deserializeBinary(
+      msg = SyncProtoBuf.Message.deserializeBinary(
         envelopePb.getContent() as Uint8Array,
       );
     }

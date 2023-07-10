@@ -7,27 +7,9 @@ import { amountToInteger } from '@actual-app/api/utils';
 import AdmZip from 'adm-zip';
 import * as d from 'date-fns';
 import normalizePathSep from 'slash';
-import uuid from 'uuid';
+import { v4 as uuidv4 } from 'uuid';
 
 // Utils
-
-function mapAccountType(type) {
-  switch (type) {
-    case 'Cash':
-    case 'Checking':
-      return 'checking';
-    case 'CreditCard':
-      return 'credit';
-    case 'Savings':
-      return 'savings';
-    case 'InvestmentAccount':
-      return 'investment';
-    case 'Mortgage':
-      return 'mortgage';
-    default:
-      return 'other';
-  }
-}
 
 function sortByKey(arr, key) {
   return [...arr].sort((item1, item2) => {
@@ -82,7 +64,6 @@ async function importAccounts(data, entityIdMap) {
     accounts.map(async account => {
       if (!account.isTombstone) {
         const id = await actual.createAccount({
-          type: mapAccountType(account.accountType),
           name: account.accountName,
           offbudget: account.onBudget ? false : true,
           closed: account.hidden ? true : false,
@@ -179,11 +160,11 @@ async function importTransactions(data, entityIdMap) {
   // Go ahead and generate ids for all of the transactions so we can
   // reliably resolve transfers
   for (let transaction of data.transactions) {
-    entityIdMap.set(transaction.entityId, uuid.v4());
+    entityIdMap.set(transaction.entityId, uuidv4());
 
     if (transaction.subTransactions) {
       for (let subTransaction of transaction.subTransactions) {
-        entityIdMap.set(subTransaction.entityId, uuid.v4());
+        entityIdMap.set(subTransaction.entityId, uuidv4());
       }
     }
   }
@@ -241,6 +222,7 @@ async function importTransactions(data, entityIdMap) {
             transaction.subTransactions &&
             transaction.subTransactions.map((t, i) => {
               return {
+                id: entityIdMap.get(t.entityId),
                 amount: amountToInteger(t.amount),
                 category: getCategory(t.categoryId),
                 notes: t.memo || null,

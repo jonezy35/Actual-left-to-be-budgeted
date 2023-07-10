@@ -13,6 +13,18 @@ rulesDirPlugin.RULES_DIR = path.join(
 const ruleFCMsg =
   'Type the props argument and let TS infer or use ComponentType for a component prop';
 
+const restrictedImportPatterns = [
+  {
+    group: ['*.api', '*.web', '*.electron'],
+    message: 'Don’t directly reference imports from other platforms',
+  },
+  {
+    group: ['uuid'],
+    importNames: ['*'],
+    message: "Use `import { v4 as uuidv4 } from 'uuid'` instead",
+  },
+];
+
 module.exports = {
   plugins: ['prettier', 'import', 'rulesdir', '@typescript-eslint'],
   extends: ['react-app', 'plugin:@typescript-eslint/recommended'],
@@ -54,8 +66,16 @@ module.exports = {
     //   },
     // ],
 
+    'import/extensions': [
+      'error',
+      'never',
+      {
+        json: 'always',
+      },
+    ],
     'import/no-useless-path-segments': 'error',
     'import/no-duplicates': ['error', { 'prefer-inline': true }],
+    'import/no-unused-modules': ['error', { unusedExports: true }],
     'import/order': [
       'error',
       {
@@ -94,7 +114,14 @@ module.exports = {
         message:
           'Using default React import is discouraged, please use named exports directly instead.',
       },
+      {
+        // forbid <a> in favor of <LinkButton> or <ExternalLink>
+        selector: 'JSXOpeningElement[name.name="a"]',
+        message:
+          'Using <a> is discouraged, please use <LinkButton> or <ExternalLink> instead.',
+      },
     ],
+    'no-restricted-imports': ['error', { patterns: restrictedImportPatterns }],
 
     // Rules disable during TS migration
     '@typescript-eslint/no-var-requires': 'off',
@@ -104,8 +131,11 @@ module.exports = {
   },
   overrides: [
     {
-      files: ['./**/*.js'],
+      files: ['.eslintrc.js', './**/.eslintrc.js'],
       parserOptions: { project: null },
+      rules: {
+        '@typescript-eslint/consistent-type-exports': 'off',
+      },
     },
     {
       files: [
@@ -140,6 +170,7 @@ module.exports = {
           'error',
           {
             patterns: [
+              ...restrictedImportPatterns,
               {
                 group: ['loot-core/**'],
                 message:
@@ -150,5 +181,25 @@ module.exports = {
         ],
       },
     },
+    {
+      files: [
+        '**/icons/**/*.js',
+        '**/mocks/**/*.{js,ts,tsx}',
+        '**/{mocks,__mocks__}/*.{js,ts,tsx}',
+        // can't correctly resolve usages
+        '**/*.{testing,electron,browser,web,api}.ts',
+      ],
+      rules: { 'import/no-unused-modules': 'off' },
+    },
   ],
+  settings: {
+    'import/parsers': {
+      '@typescript-eslint/parser': ['.ts', '.tsx'],
+    },
+    'import/resolver': {
+      typescript: {
+        alwaysTryTypes: true,
+      },
+    },
+  },
 };

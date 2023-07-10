@@ -257,7 +257,7 @@ function ToBudget({
 }
 
 type BudgetSummaryProps = {
-  month: string | number;
+  month: string;
   isGoalTemplatesEnabled: boolean;
 };
 export function BudgetSummary({
@@ -396,12 +396,20 @@ export function BudgetSummary({
                         text: 'Set budgets to 3 month avg',
                       },
                       isGoalTemplatesEnabled && {
+                        name: 'check-templates',
+                        text: 'Check templates',
+                      },
+                      isGoalTemplatesEnabled && {
                         name: 'apply-goal-template',
                         text: 'Apply budget template',
                       },
                       isGoalTemplatesEnabled && {
                         name: 'overwrite-goal-template',
                         text: 'Overwrite with budget template',
+                      },
+                      isGoalTemplatesEnabled && {
+                        name: 'cleanup-goal-template',
+                        text: 'End of month cleanup',
                       },
                     ]}
                   />

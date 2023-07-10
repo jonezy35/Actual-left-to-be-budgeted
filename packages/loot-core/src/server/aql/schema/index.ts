@@ -61,8 +61,6 @@ export const schema = {
   accounts: {
     id: f('id'),
     name: f('string', { required: true }),
-    // TODO: enum
-    type: f('string'),
     offbudget: f('boolean'),
     closed: f('boolean'),
     sort_order: f('float'),
@@ -115,6 +113,13 @@ export const schema = {
   notes: {
     id: f('id'),
     note: f('string'),
+  },
+  transaction_filters: {
+    id: f('id'),
+    name: f('string'),
+    conditions_op: f('string'),
+    conditions: f('json'),
+    tombstone: f('boolean'),
   },
 };
 

@@ -5,8 +5,15 @@ import { pushModal } from 'loot-core/src/client/actions/modals';
 
 import useNordigenStatus from '../../hooks/useNordigenStatus';
 import { authorizeBank } from '../../nordigen';
-import { colors } from '../../style';
-import { View, Text, Modal, P, Button, ButtonWithLoading } from '../common';
+import {
+  View,
+  Text,
+  Modal,
+  P,
+  Button,
+  ButtonWithLoading,
+  ExternalLink,
+} from '../common';
 
 export default function CreateAccount({ modalProps, syncServerStatus }) {
   const dispatch = useDispatch();
@@ -41,73 +48,81 @@ export default function CreateAccount({ modalProps, syncServerStatus }) {
   return (
     <Modal title="Add Account" {...modalProps}>
       {() => (
-        <View style={{ maxWidth: 500 }}>
-          <Text style={{ marginBottom: 10, lineHeight: '1.4em', fontSize: 15 }}>
-            <strong>Link your bank accounts</strong> to automatically download
-            transactions. We offer hundreds of banks to sync with, and Nordigen
-            will provide reliable, up-to-date information.
-          </Text>
-
-          <ButtonWithLoading
-            primary
-            disabled={syncServerStatus !== 'online'}
-            style={{
-              padding: '10px 0',
-              fontSize: 15,
-              fontWeight: 600,
-              marginTop: 10,
-            }}
-            onClick={onConnect}
-          >
-            {isNordigenSetupComplete
-              ? 'Link bank account'
-              : 'Set-up Nordigen for bank-sync'}
-          </ButtonWithLoading>
-          {isNordigenSetupComplete && (
-            <Button bare onClick={onNordigenInit}>
-              set new API secrets
+        <View style={{ maxWidth: 500, gap: 30 }}>
+          <View style={{ gap: 10 }}>
+            <Button
+              primary
+              style={{
+                padding: '10px 0',
+                fontSize: 15,
+                fontWeight: 600,
+              }}
+              onClick={onCreateLocalAccount}
+            >
+              Create local account
             </Button>
-          )}
-
-          {syncServerStatus !== 'online' && (
-            <P style={{ color: colors.r5, marginTop: 5 }}>
-              Nordigen integration is only available for budgets using
-              actual-server.{' '}
-              <a
-                href="https://actualbudget.github.io/docs/Installing/overview"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                Learn more.
-              </a>
-            </P>
-          )}
-
-          <View
-            style={{
-              marginTop: 30,
-              marginBottom: 10,
-              lineHeight: '1.4em',
-              fontSize: 15,
-            }}
-          >
-            You can also create a local account if you want to track
-            transactions manually. You can add transactions manually or import
-            QIF/OFX/QFX files.
+            <View style={{ lineHeight: '1.4em', fontSize: 15 }}>
+              <Text>
+                <strong>Create a local account</strong> if you want to add
+                transactions manually. You can also{' '}
+                <ExternalLink
+                  to="https://actualbudget.org/docs/transactions/importing"
+                  linkColor="muted"
+                >
+                  import QIF/OFX/QFX files into a local account
+                </ExternalLink>
+                .
+              </Text>
+            </View>
           </View>
-
-          <Button
-            style={{
-              padding: '10px 0',
-              fontSize: 15,
-              fontWeight: 600,
-              marginTop: 10,
-              color: colors.n3,
-            }}
-            onClick={onCreateLocalAccount}
-          >
-            Create local account
-          </Button>
+          <View style={{ gap: 10 }}>
+            {syncServerStatus === 'online' ? (
+              <>
+                <ButtonWithLoading
+                  disabled={syncServerStatus !== 'online'}
+                  style={{
+                    padding: '10px 0',
+                    fontSize: 15,
+                    fontWeight: 600,
+                    flex: 1,
+                  }}
+                  onClick={onConnect}
+                >
+                  {isNordigenSetupComplete
+                    ? 'Link bank account with Nordigen'
+                    : 'Set up Nordigen for bank sync'}
+                </ButtonWithLoading>
+                <Text style={{ lineHeight: '1.4em', fontSize: 15 }}>
+                  <strong>Link a bank account</strong> to automatically download
+                  transactions. Nordigen provides reliable, up-to-date
+                  information from hundreds of banks.
+                </Text>
+              </>
+            ) : (
+              <>
+                <Button
+                  disabled
+                  style={{
+                    padding: '10px 0',
+                    fontSize: 15,
+                    fontWeight: 600,
+                  }}
+                >
+                  Set up Nordigen for bank sync
+                </Button>
+                <P style={{ fontSize: 15 }}>
+                  Connect to an Actual server to set up{' '}
+                  <ExternalLink
+                    to="https://actualbudget.org/docs/advanced/bank-sync"
+                    linkColor="muted"
+                  >
+                    automatic syncing with Nordigen
+                  </ExternalLink>
+                  .
+                </P>
+              </>
+            )}
+          </View>
         </View>
       )}
     </Modal>

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 
 import { useAllFeatureFlags } from '../../hooks/useFeatureFlag';
 import { colors } from '../../style';
-import { Link, Text, View } from '../common';
+import { LinkButton, Text, View } from '../common';
 import { Checkbox } from '../forms';
 
 import { Setting } from './UI';
@@ -43,16 +43,6 @@ export default function ExperimentalFeatures({ prefs, savePrefs }) {
 
             <label style={{ display: 'flex' }}>
               <Checkbox
-                id="sync-account-flag"
-                checked={flags.syncAccount}
-                onChange={() => {
-                  savePrefs({ 'flags.syncAccount': !flags.syncAccount });
-                }}
-              />{' '}
-              <View>Account syncing via Nordigen</View>
-            </label>
-            <label style={{ display: 'flex' }}>
-              <Checkbox
                 id="goal-templates-flag"
                 checked={flags.goalTemplatesEnabled}
                 onChange={() => {
@@ -65,7 +55,7 @@ export default function ExperimentalFeatures({ prefs, savePrefs }) {
             </label>
           </View>
         ) : (
-          <Link
+          <LinkButton
             onClick={() => setExpanded(true)}
             style={{
               flexShrink: 0,
@@ -74,7 +64,7 @@ export default function ExperimentalFeatures({ prefs, savePrefs }) {
             }}
           >
             I understand the risks, show experimental features
-          </Link>
+          </LinkButton>
         )
       }
     >

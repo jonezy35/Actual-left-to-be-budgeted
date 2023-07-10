@@ -1,6 +1,6 @@
 import * as d from 'date-fns';
+import { v4 as uuidv4 } from 'uuid';
 
-import * as uuid from '../../platform/uuid';
 import { dayFromDate, parseDate } from '../../shared/months';
 import q from '../../shared/query';
 import { getApproxNumberThreshold } from '../../shared/rules';
@@ -48,7 +48,7 @@ function getRank(day1, day2) {
   return 1 / (dayDiff + 1);
 }
 
-export function matchSchedules(allOccurs, config, partialMatchRank = 0.5) {
+function matchSchedules(allOccurs, config, partialMatchRank = 0.5) {
   allOccurs = [...allOccurs].reverse();
   let baseOccur = allOccurs[0];
   let occurs = allOccurs.slice(1);
@@ -369,7 +369,7 @@ export async function findSchedules() {
 
       // Convert to schedule and return it
       return {
-        id: uuid.v4Sync(),
+        id: uuidv4(),
         account: winner.account,
         payee: winner.payee,
         date: winner.date,

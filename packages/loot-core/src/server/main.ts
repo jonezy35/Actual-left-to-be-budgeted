@@ -1,7 +1,9 @@
 import './polyfills';
 import * as injectAPI from '@actual-app/api/injected';
+import * as CRDT from '@actual-app/crdt';
 import * as YNAB4 from '@actual-app/import-ynab4/importer';
 import * as YNAB5 from '@actual-app/import-ynab5/importer';
+import { v4 as uuidv4 } from 'uuid';
 
 import { createTestBudget } from '../mocks/budget';
 import { captureException, captureBreadcrumb } from '../platform/exceptions';
@@ -10,13 +12,12 @@ import * as connection from '../platform/server/connection';
 import * as fs from '../platform/server/fs';
 import logger from '../platform/server/log';
 import * as sqlite from '../platform/server/sqlite';
-import * as uuid from '../platform/uuid';
-import { fromPlaidAccountType } from '../shared/accounts';
 import { isNonProductionEnvironment } from '../shared/environment';
 import * as monthUtils from '../shared/months';
 import q, { Query } from '../shared/query';
 import { FIELD_TYPES as ruleFieldTypes } from '../shared/rules';
 import { amountToInteger, stringToInteger } from '../shared/util';
+import { Handlers } from '../types/handlers';
 
 import { exportToCSV, exportQueryToCSV } from './accounts/export-to-csv';
 import * as link from './accounts/link';
@@ -38,20 +39,11 @@ import {
 import budgetApp from './budget/app';
 import * as budget from './budget/base';
 import * as cloudStorage from './cloud-storage';
-import {
-  getClock,
-  setClock,
-  makeClock,
-  makeClientId,
-  serializeClock,
-  deserializeClock,
-  Timestamp,
-  merkle,
-} from './crdt';
 import * as db from './db';
 import * as mappings from './db/mappings';
 import * as encryption from './encryption';
 import { APIError, TransactionError, PostError, RuleError } from './errors';
+import filtersApp from './filters/app';
 import app from './main-app';
 import { mutator, runHandler } from './mutators';
 import notesApp from './notes/app';
@@ -69,12 +61,10 @@ import {
   setSyncingMode,
   makeTestMessage,
   clearFullSyncTimeout,
-  syncAndReceiveMessages,
   resetSync,
   repairSync,
 } from './sync';
 import * as syncMigrations from './sync/migrate';
-import * as SyncPb from './sync/proto/sync_pb';
 import toolsApp from './tools/app';
 import { withUndo, clearUndo, undo, redo } from './undo';
 import { updateVersion } from './update';
@@ -82,7 +72,6 @@ import { uniqueFileName, idFromFileName } from './util/budget-name';
 
 let DEMO_BUDGET_ID = '_demo-budget';
 let TEST_BUDGET_ID = '_test-budget';
-let UNCONFIGURED_SERVER = 'https://not-configured/';
 
 // util
 
@@ -96,7 +85,9 @@ function onSheetChange({ names }) {
 
 // handlers
 
-export let handlers = {};
+// need to work around the type system here because the object
+// is /currently/ empty but we promise to fill it in later
+export let handlers = {} as unknown as Handlers;
 
 handlers['undo'] = mutator(async function () {
   return undo();
@@ -756,7 +747,6 @@ handlers['accounts-link'] = async function ({
     id: upgradingId,
     account_id: account.account_id,
     official_name: account.official_name,
-    type: fromPlaidAccountType(account.type),
     balance_current: amountToInteger(account.balances.current),
     balance_available: amountToInteger(account.balances.available),
     balance_limit: amountToInteger(account.balances.limit),
@@ -799,14 +789,13 @@ handlers['nordigen-accounts-link'] = async function ({
       bank: bank.id,
     });
   } else {
-    id = uuid.v4Sync();
+    id = uuidv4();
     await db.insertWithUUID('accounts', {
       id,
       account_id: account.account_id,
       mask: account.mask,
       name: account.name,
       official_name: account.official_name,
-      type: account.type,
       bank: bank.id,
     });
     await db.insertPayee({
@@ -855,7 +844,6 @@ handlers['nordigen-accounts-connect'] = async function ({
 
 handlers['account-create'] = mutator(async function ({
   name,
-  type,
   balance,
   offBudget,
   closed,
@@ -863,7 +851,6 @@ handlers['account-create'] = mutator(async function ({
   return withUndo(async () => {
     const id = await db.insertAccount({
       name,
-      type,
       offbudget: offBudget ? 1 : 0,
       closed: closed ? 1 : 0,
     });
@@ -933,7 +920,7 @@ handlers['account-close'] = mutator(async function ({
         [id],
       );
 
-      await batchMessages(() => {
+      await batchMessages(async () => {
         // TODO: what this should really do is send a special message that
         // automatically marks the tombstone value for all transactions
         // within an account... or something? This is problematic
@@ -971,7 +958,7 @@ handlers['account-close'] = mutator(async function ({
         );
 
         await handlers['transaction-add']({
-          id: uuid.v4Sync(),
+          id: uuidv4(),
           payee: payeeId,
           amount: -balance,
           account: id,
@@ -1112,7 +1099,7 @@ handlers['accounts-sync'] = async function ({ id }) {
           errors.push({
             accountId: acct.id,
             message:
-              'There was an internal error. Please get in touch https://actualbudget.github.io/docs/Contact for support.',
+              'There was an internal error. Please get in touch https://actualbudget.org/contact for support.',
             internal: err.stack,
           });
 
@@ -1137,40 +1124,42 @@ handlers['accounts-sync'] = async function ({ id }) {
 handlers['secret-set'] = async function ({ name, value }) {
   let userToken = await asyncStorage.getItem('user-token');
 
-  if (userToken) {
-    try {
-      return await post(
-        getServer().BASE_SERVER + '/secret',
-        {
-          name,
-          value,
-        },
-        {
-          'X-ACTUAL-TOKEN': userToken,
-        },
-      );
-    } catch (error) {
-      console.error(error);
-      return { error: 'failed' };
-    }
+  if (!userToken) {
+    return { error: 'unauthorized' };
   }
-  return { error: 'unauthorized' };
+
+  try {
+    return await post(
+      getServer().BASE_SERVER + '/secret',
+      {
+        name,
+        value,
+      },
+      {
+        'X-ACTUAL-TOKEN': userToken,
+      },
+    );
+  } catch (error) {
+    console.error(error);
+    return { error: 'failed' };
+  }
 };
 
 handlers['secret-check'] = async function (name) {
   let userToken = await asyncStorage.getItem('user-token');
 
-  if (userToken) {
-    try {
-      return await get(getServer().BASE_SERVER + '/secret/' + name, {
-        'X-ACTUAL-TOKEN': userToken,
-      });
-    } catch (error) {
-      console.error(error);
-      return { error: 'failed' };
-    }
+  if (!userToken) {
+    return { error: 'unauthorized' };
   }
-  return { error: 'unauthorized' };
+
+  try {
+    return await get(getServer().BASE_SERVER + '/secret/' + name, {
+      'X-ACTUAL-TOKEN': userToken,
+    });
+  } catch (error) {
+    console.error(error);
+    return { error: 'failed' };
+  }
 };
 
 handlers['nordigen-poll-web-token'] = async function ({
@@ -1178,62 +1167,59 @@ handlers['nordigen-poll-web-token'] = async function ({
   requisitionId,
 }) {
   let userToken = await asyncStorage.getItem('user-token');
+  if (!userToken) return null;
 
-  if (userToken) {
-    let startTime = Date.now();
-    stopPolling = false;
+  let startTime = Date.now();
+  stopPolling = false;
 
-    async function getData(cb) {
-      if (stopPolling) {
-        return;
-      }
-
-      if (Date.now() - startTime >= 1000 * 60 * 10) {
-        cb('timeout');
-        return;
-      }
-
-      let data = await post(
-        getServer().NORDIGEN_SERVER + '/get-accounts',
-        {
-          upgradingAccountId,
-          requisitionId,
-        },
-        {
-          'X-ACTUAL-TOKEN': userToken,
-        },
-      );
-
-      if (data) {
-        if (data.error) {
-          cb('unknown');
-        } else {
-          cb(null, data);
-        }
-      } else {
-        setTimeout(() => getData(cb), 3000);
-      }
+  async function getData(cb) {
+    if (stopPolling) {
+      return;
     }
 
-    return new Promise(resolve => {
-      getData((error, data) => {
-        if (error) {
-          resolve({ error });
-        } else {
-          resolve({ data });
-        }
-      });
-    });
+    if (Date.now() - startTime >= 1000 * 60 * 10) {
+      cb('timeout');
+      return;
+    }
+
+    let data = await post(
+      getServer().NORDIGEN_SERVER + '/get-accounts',
+      {
+        upgradingAccountId,
+        requisitionId,
+      },
+      {
+        'X-ACTUAL-TOKEN': userToken,
+      },
+    );
+
+    if (data) {
+      if (data.error) {
+        cb('unknown');
+      } else {
+        cb(null, data);
+      }
+    } else {
+      setTimeout(() => getData(cb), 3000);
+    }
   }
 
-  return null;
+  return new Promise(resolve => {
+    getData((error, data) => {
+      if (error) {
+        resolve({ error });
+      } else {
+        resolve({ data });
+      }
+    });
+  });
 };
 
 handlers['nordigen-status'] = async function () {
   const userToken = await asyncStorage.getItem('user-token');
 
   if (!userToken) {
-    return Promise.reject({ error: 'unauthorized' });
+    return { error: 'unauthorized' };
   }
 
   return post(
@@ -1249,7 +1235,7 @@ handlers['nordigen-get-banks'] = async function (country) {
   const userToken = await asyncStorage.getItem('user-token');
 
   if (!userToken) {
-    return Promise.reject({ error: 'unauthorized' });
+    return { error: 'unauthorized' };
   }
 
   return post(
@@ -1273,25 +1259,26 @@ handlers['nordigen-create-web-token'] = async function ({
 }) {
   let userToken = await asyncStorage.getItem('user-token');
 
-  if (userToken) {
-    try {
-      return await post(
-        getServer().NORDIGEN_SERVER + '/create-web-token',
-        {
-          upgradingAccountId,
-          institutionId,
-          accessValidForDays,
-        },
-        {
-          'X-ACTUAL-TOKEN': userToken,
-        },
-      );
-    } catch (error) {
-      console.error(error);
-      return { error: 'failed' };
-    }
+  if (!userToken) {
+    return { error: 'unauthorized' };
   }
-  return { error: 'unauthorized' };
+
+  try {
+    return await post(
+      getServer().NORDIGEN_SERVER + '/create-web-token',
+      {
+        upgradingAccountId,
+        institutionId,
+        accessValidForDays,
+      },
+      {
+        'X-ACTUAL-TOKEN': userToken,
+      },
+    );
+  } catch (error) {
+    console.error(error);
+    return { error: 'failed' };
+  }
 };
 
 handlers['nordigen-accounts-sync'] = async function ({ id }) {
@@ -1353,7 +1340,7 @@ handlers['nordigen-accounts-sync'] = async function ({ id }) {
           errors.push({
             accountId: acct.id,
             message:
-              'There was an internal error. Please get in touch https://actualbudget.github.io/docs/Contact for support.',
+              'There was an internal error. Please get in touch https://actualbudget.org/contact for support.',
             internal: err.stack,
           });
 
@@ -1423,8 +1410,11 @@ handlers['account-unlink'] = mutator(async function ({ id }) {
   // No more accounts are associated with this bank. We can remove
   // it from Nordigen.
   let userToken = await asyncStorage.getItem('user-token');
+  if (!userToken) {
+    return 'ok';
+  }
 
-  if (userToken && count === 0) {
+  if (count === 0) {
     let { bank_id: requisitionId } = await db.first(
       'SELECT bank_id FROM banks WHERE id = ?',
       [bankId],
@@ -1488,14 +1478,12 @@ handlers['save-global-prefs'] = async function (prefs) {
 handlers['load-global-prefs'] = async function () {
   let [
     [, floatingSidebar],
-    [, seenTutorial],
     [, maxMonths],
     [, autoUpdate],
     [, documentDir],
     [, encryptKey],
   ] = await asyncStorage.multiGet([
     'floating-sidebar',
-    'seen-tutorial',
     'max-months',
     'auto-update',
     'document-dir',
@@ -1503,7 +1491,6 @@ handlers['load-global-prefs'] = async function () {
   ]);
   return {
     floatingSidebar: floatingSidebar === 'true' ? true : false,
-    seenTutorial: seenTutorial === 'true' ? true : false,
     maxMonths: stringToInteger(maxMonths || ''),
     autoUpdate: autoUpdate == null || autoUpdate === 'true' ? true : false,
     documentDir: documentDir || getDefaultDocumentDir(),
@@ -1551,7 +1538,7 @@ handlers['key-make'] = async function ({ password }) {
   }
 
   let salt = encryption.randomBytes(32).toString('base64');
-  let id = uuid.v4Sync();
+  let id = uuidv4();
   let key = await encryption.createKey({ id, password, salt });
 
   // Load the key
@@ -1629,10 +1616,14 @@ handlers['key-test'] = async function ({ fileId, password }) {
   return {};
 };
 
+handlers['get-did-bootstrap'] = async function () {
+  return Boolean(await asyncStorage.getItem('did-bootstrap'));
+};
+
 handlers['subscribe-needs-bootstrap'] = async function ({
   url,
 }: { url? } = {}) {
-  if (getServer(url).BASE_SERVER === UNCONFIGURED_SERVER) {
+  if (!getServer(url)) {
     return { bootstrapped: true, hasServer: false };
   }
 
@@ -1671,45 +1662,48 @@ handlers['subscribe-bootstrap'] = async function ({ password }) {
   return { error: 'internal' };
 };
 
-handlers['subscribe-set-user'] = async function ({ token }) {
-  await asyncStorage.setItem('user-token', token);
-};
-
 handlers['subscribe-get-user'] = async function () {
-  if (getServer() && getServer().BASE_SERVER === UNCONFIGURED_SERVER) {
+  if (!getServer()) {
+    if (!(await asyncStorage.getItem('did-bootstrap'))) {
+      return null;
+    }
     return { offline: false };
   }
 
   let userToken = await asyncStorage.getItem('user-token');
 
-  if (userToken) {
-    try {
-      const res = await get(getServer().SIGNUP_SERVER + '/validate', {
-        headers: {
-          'X-ACTUAL-TOKEN': userToken,
-        },
-      });
-      const { status, reason } = JSON.parse(res);
-
-      if (status === 'error') {
-        if (reason === 'unauthorized') {
-          return null;
-        }
-        return { offline: true };
-      }
-
-      return { offline: false };
-    } catch (e) {
-      console.log(e);
-      return { offline: true };
-    }
+  if (!userToken) {
+    return null;
   }
 
-  return null;
+  try {
+    const res = await get(getServer().SIGNUP_SERVER + '/validate', {
+      headers: {
+        'X-ACTUAL-TOKEN': userToken,
+      },
+    });
+    const { status, reason } = JSON.parse(res);
+
+    if (status === 'error') {
+      if (reason === 'unauthorized') {
+        return null;
+      }
+      return { offline: true };
+    }
+
+    return { offline: false };
+  } catch (e) {
+    console.log(e);
+    return { offline: true };
+  }
 };
 
 handlers['subscribe-change-password'] = async function ({ password }) {
   let userToken = await asyncStorage.getItem('user-token');
+  if (!userToken) {
+    return { error: 'not-logged-in' };
+  }
+
   try {
     await post(getServer().SIGNUP_SERVER + '/change-password', {
       token: userToken,
@@ -1747,7 +1741,7 @@ handlers['subscribe-sign-out'] = async function () {
 };
 
 handlers['get-server-version'] = async function () {
-  if (!getServer() || getServer().BASE_SERVER === UNCONFIGURED_SERVER) {
+  if (!getServer()) {
     return { error: 'no-server' };
   }
 
@@ -1769,7 +1763,11 @@ handlers['get-server-url'] = async function () {
 };
 
 handlers['set-server-url'] = async function ({ url, validate = true }) {
-  if (url != null) {
+  if (url == null) {
+    await asyncStorage.removeItem('user-token');
+  } else {
+    url = url.replace(/\/+$/, '');
+
     if (validate) {
       // Validate the server is running
       let { error } = await runHandler(handlers['subscribe-needs-bootstrap'], {
@@ -1779,12 +1777,10 @@ handlers['set-server-url'] = async function ({ url, validate = true }) {
         return { error };
       }
     }
-  } else {
-    // When the server isn't configured, we just use a placeholder
-    url = UNCONFIGURED_SERVER;
   }
 
-  asyncStorage.setItem('server-url', url);
+  await asyncStorage.setItem('server-url', url);
+  await asyncStorage.setItem('did-bootstrap', true);
   setServer(url);
   return {};
 };
@@ -1891,7 +1887,7 @@ handlers['download-budget'] = async function ({ fileId }) {
 
   let id = result.id;
   await handlers['load-budget']({ id });
-  result = await handlers['sync-budget']({ id });
+  result = await handlers['sync-budget']();
   await handlers['close-budget']();
   if (result.error) {
     return result;
@@ -1900,7 +1896,7 @@ handlers['download-budget'] = async function ({ fileId }) {
 };
 
 // open and sync, but don’t close
-handlers['sync-budget'] = async function ({ id }) {
+handlers['sync-budget'] = async function () {
   setSyncingMode('enabled');
   await initialFullSync();
 
@@ -1966,7 +1962,7 @@ handlers['close-budget'] = async function () {
 handlers['delete-budget'] = async function ({ id, cloudFileId }) {
   // If it's a cloud file, you can delete it from the server by
   // passing its cloud id
-  if (cloudFileId && !process.env.IS_BETA) {
+  if (cloudFileId) {
     await cloudStorage.removeFile(cloudFileId).catch(err => {});
   }
 
@@ -2043,11 +2039,6 @@ handlers['create-budget'] = async function ({
   }
 
   return {};
-};
-
-handlers['set-tutorial-seen'] = async function () {
-  await asyncStorage.setItem('seen-tutorial', 'true');
-  return 'ok';
 };
 
 handlers['import-budget'] = async function ({ filepath, type }) {
@@ -2175,7 +2166,7 @@ async function loadBudget(id) {
   // Older versions didn't tag the file with the current user, so do
   // so now
   if (!prefs.getPrefs().userId) {
-    let [[, userId]] = await asyncStorage.multiGet(['user-token']);
+    let userId = await asyncStorage.getItem('user-token');
     prefs.savePrefs({ userId });
   }
 
@@ -2208,10 +2199,10 @@ async function loadBudget(id) {
     //
     // TODO: The client id should be stored elsewhere. It shouldn't
     // work this way, but it's fine for now.
-    getClock().timestamp.setNode(makeClientId());
+    CRDT.getClock().timestamp.setNode(CRDT.makeClientId());
     await db.runQuery(
       'INSERT OR REPLACE INTO messages_clock (id, clock) VALUES (1, ?)',
-      [serializeClock(getClock())],
+      [CRDT.serializeClock(CRDT.getClock())],
     );
 
     await prefs.savePrefs({ resetClock: false });
@@ -2247,12 +2238,14 @@ async function loadBudget(id) {
 
   // Ensure that syncing is enabled
   if (process.env.NODE_ENV !== 'test') {
-    if (process.env.IS_BETA || id === DEMO_BUDGET_ID) {
+    if (id === DEMO_BUDGET_ID) {
       setSyncingMode('disabled');
-    } else if (id === TEST_BUDGET_ID) {
-      await asyncStorage.setItem('lastBudget', id);
     } else {
-      setSyncingMode('enabled');
+      if (getServer()) {
+        setSyncingMode('enabled');
+      } else {
+        setSyncingMode('disabled');
+      }
 
       await asyncStorage.setItem('lastBudget', id);
 
@@ -2268,37 +2261,13 @@ async function loadBudget(id) {
   return {};
 }
 
-handlers['get-upgrade-notifications'] = async function () {
-  let { id } = prefs.getPrefs();
-  if (id === TEST_BUDGET_ID || id === DEMO_BUDGET_ID) {
-    return [];
-  }
-
-  let types = ['schedules', 'repair-splits'];
-  let unseen = [];
-
-  for (let type of types) {
-    let key = `notifications.${type}`;
-    if (prefs.getPrefs()[key] == null) {
-      unseen.push(type);
-    }
-  }
-
-  return unseen;
-};
-
-handlers['seen-upgrade-notification'] = async function ({ type }) {
-  let key = `notifications.${type}`;
-  prefs.savePrefs({ [key]: true });
-};
-
 handlers['upload-file-web'] = async function ({ filename, contents }) {
   if (!Platform.isWeb) {
     return null;
   }
 
   await fs.writeFile('/uploads/' + filename, contents);
-  return 'ok';
+  return {};
 };
 
 handlers['backups-get'] = async function ({ id }) {
@@ -2334,13 +2303,13 @@ handlers['app-focused'] = async function () {
   }
 };
 
-handlers = installAPI(handlers);
+handlers = installAPI(handlers) as Handlers;
 
 injectAPI.override((name, args) => runHandler(app.handlers[name], args));
 
 // A hack for now until we clean up everything
 app.handlers = handlers;
-app.combine(schedulesApp, budgetApp, notesApp, toolsApp);
+app.combine(schedulesApp, budgetApp, notesApp, toolsApp, filtersApp);
 
 function getDefaultDocumentDir() {
   if (Platform.isMobile) {
@@ -2381,6 +2350,7 @@ async function setupDocumentsDir() {
   fs._setDocumentDir(documentDir);
 }
 
+// eslint-disable-next-line import/no-unused-modules
 export async function initApp(isDev, socketName) {
   await sqlite.init();
   await Promise.all([asyncStorage.init(), fs.init()]);
@@ -2410,10 +2380,19 @@ export async function initApp(isDev, socketName) {
   // }
   // }
 
-  const url = await asyncStorage.getItem('server-url');
-  if (url) {
-    setServer(url);
+  let url = await asyncStorage.getItem('server-url');
+
+  // TODO: remove this if statement after a few releases
+  if (url === 'https://not-configured/') {
+    url = null;
+    await asyncStorage.setItem('server-url', null);
+    await asyncStorage.setItem('did-bootstrap', true);
   }
+
+  if (!url) {
+    await asyncStorage.removeItem('user-token');
+  }
+  setServer(url);
 
   connection.init(socketName, app.handlers);
 
@@ -2425,7 +2404,7 @@ export async function initApp(isDev, socketName) {
     });
   }
 
-  if (isDev || process.env.IS_BETA) {
+  if (isDev) {
     global.$send = (name, args) => runHandler(app.handlers[name], args);
     global.$query = aqlQuery;
     global.$q = q;
@@ -2434,6 +2413,7 @@ export async function initApp(isDev, socketName) {
   }
 }
 
+// eslint-disable-next-line import/no-unused-modules
 export async function init(config) {
   // Get from build
 
@@ -2472,6 +2452,7 @@ export async function init(config) {
 }
 
 // Export a few things required for the platform
+// eslint-disable-next-line import/no-unused-modules
 export const lib = {
   getDataDir: fs.getDataDir,
   sendMessage: (msg, args) => connection.send(msg, args),
@@ -2480,20 +2461,6 @@ export const lib = {
     return res;
   },
   on: (name, func) => app.events.on(name, func),
-  syncAndReceiveMessages,
   q,
   db,
-
-  // Expose CRDT mechanisms so server can use them
-  merkle,
-  timestamp: {
-    getClock,
-    setClock,
-    makeClock,
-    makeClientId,
-    serializeClock,
-    deserializeClock,
-    Timestamp,
-  },
-  SyncProtoBuf: SyncPb,
 };

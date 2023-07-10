@@ -1,5 +1,7 @@
 import { initBackend as initSQLBackend } from 'absurd-sql/dist/indexeddb-main-thread';
 
+import packageJson from '../package.json';
+
 const backendWorkerUrl = new URL('./browser-server.js', import.meta.url);
 
 // This file installs global variables that the app expects.
@@ -8,7 +10,7 @@ const backendWorkerUrl = new URL('./browser-server.js', import.meta.url);
 // everything else.
 
 let IS_DEV = process.env.NODE_ENV === 'development';
-let ACTUAL_VERSION = process.env.REACT_APP_ACTUAL_VERSION;
+let ACTUAL_VERSION = packageJson.version;
 
 // *** Start the backend ***
 let worker;
@@ -39,7 +41,6 @@ global.Actual = {
   IS_DEV,
   ACTUAL_VERSION,
   IS_FAKE_WEB: true,
-  IS_BETA: process.env.REACT_APP_RELEASE_TYPE === 'beta',
 
   logToTerminal: (...args) => {
     console.log(...args);

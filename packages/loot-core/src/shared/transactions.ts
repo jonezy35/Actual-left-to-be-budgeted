@@ -1,4 +1,4 @@
-import * as uuid from '../platform/uuid';
+import { v4 as uuidv4 } from 'uuid';
 
 import { last, diffItems, applyChanges } from './util';
 
@@ -28,7 +28,7 @@ export function makeChild(parent, data) {
     amount: 0,
     ...data,
     payee: data.payee || parent.payee,
-    id: data.id ? data.id : prefix + uuid.v4Sync(),
+    id: data.id ? data.id : prefix + uuidv4(),
     account: parent.account,
     date: parent.date,
     cleared: parent.cleared != null ? parent.cleared : null,
@@ -56,7 +56,7 @@ export function recalculateSplit(trans) {
   };
 }
 
-export function findParentIndex(transactions, idx) {
+function findParentIndex(transactions, idx) {
   // This relies on transactions being sorted in a way where parents
   // are always before children, which is enforced in the db layer.
   // Walk backwards and find the last parent;
@@ -95,7 +95,7 @@ export function ungroupTransactions(transactions) {
   return x;
 }
 
-export function groupTransaction(split) {
+function groupTransaction(split) {
   return { ...split[0], subtransactions: split.slice(1) };
 }
 
@@ -110,7 +110,7 @@ export function applyTransactionDiff(groupedTrans, diff) {
   return groupTransaction(applyChanges(diff, ungroupTransaction(groupedTrans)));
 }
 
-export function replaceTransactions(transactions, id, func) {
+function replaceTransactions(transactions, id, func) {
   let idx = transactions.findIndex(t => t.id === id);
   let trans = transactions[idx];
   let transactionsCopy = [...transactions];
@@ -242,14 +242,14 @@ export function splitTransaction(transactions, id) {
 
 export function realizeTempTransactions(transactions) {
   let parent = transactions.find(t => !t.is_child);
-  parent = { ...parent, id: uuid.v4Sync() };
+  parent = { ...parent, id: uuidv4() };
 
   let children = transactions.filter(t => t.is_child);
   return [
     parent,
     ...children.map(child => ({
       ...child,
-      id: uuid.v4Sync(),
+      id: uuidv4(),
       parent_id: parent.id,
     })),
   ];

@@ -1,4 +1,5 @@
-import * as uuid from '../../uuid';
+import { v4 as uuidv4 } from 'uuid';
+
 import * as undo from '../undo';
 
 import type * as T from '.';
@@ -72,13 +73,10 @@ function connectSocket(port, onOpen) {
 
     onOpen();
   };
-
-  client.onclose = event => {
-    socketClient = null;
-  };
 }
 
 export const init: T.Init = async function (socketName) {
+  await clearServer();
   return new Promise(resolve => connectSocket(socketName, resolve));
 };
 
@@ -88,31 +86,30 @@ export const send: T.Send = function (
   { catchErrors = false } = {},
 ) {
   return new Promise((resolve, reject) => {
-    uuid.v4().then(id => {
-      replyHandlers.set(id, { resolve, reject });
+    let id = uuidv4();
+    replyHandlers.set(id, { resolve, reject });
 
-      if (socketClient) {
-        socketClient.send(
-          JSON.stringify({
-            id,
-            name,
-            args,
-            undoTag: undo.snapshot(),
-            catchErrors: !!catchErrors,
-          }),
-        );
-      } else {
-        messageQueue.push(
-          JSON.stringify({
-            id,
-            name,
-            args,
-            undoTag: undo.snapshot(),
-            catchErrors,
-          }),
-        );
-      }
-    });
+    if (socketClient) {
+      socketClient.send(
+        JSON.stringify({
+          id,
+          name,
+          args,
+          undoTag: undo.snapshot(),
+          catchErrors: !!catchErrors,
+        }),
+      );
+    } else {
+      messageQueue.push(
+        JSON.stringify({
+          id,
+          name,
+          args,
+          undoTag: undo.snapshot(),
+          catchErrors,
+        }),
+      );
+    }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   }) as any;
 };
@@ -140,4 +137,19 @@ export const listen: T.Listen = function (name, cb) {
 
 export const unlisten: T.Unlisten = function (name) {
   listeners.set(name, []);
+};
+
+async function closeSocket(onClose) {
+  socketClient.onclose = event => {
+    socketClient = null;
+    onClose();
+  };
+
+  await socketClient.close();
+}
+
+export const clearServer: T.ClearServer = async function () {
+  if (socketClient != null) {
+    return new Promise(closeSocket);
+  }
 };

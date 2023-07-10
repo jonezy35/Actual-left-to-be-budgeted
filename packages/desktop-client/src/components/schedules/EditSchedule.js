@@ -1,6 +1,6 @@
 import React, { useEffect, useReducer } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { useParams, useHistory } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 
 import { pushModal } from 'loot-core/src/client/actions/modals';
 import { useCachedPayees } from 'loot-core/src/client/data-hooks/payees';
@@ -11,7 +11,6 @@ import { extractScheduleConds } from 'loot-core/src/shared/schedules';
 
 import useSelected, { SelectedProvider } from '../../hooks/useSelected';
 import { colors } from '../../style';
-import SimpleTransactionsTable from '../accounts/SimpleTransactionsTable';
 import AccountAutocomplete from '../autocomplete/AccountAutocomplete';
 import PayeeAutocomplete from '../autocomplete/PayeeAutocomplete';
 import { Stack, View, Text, Button } from '../common';
@@ -21,6 +20,7 @@ import { Page } from '../Page';
 import DateSelect from '../select/DateSelect';
 import RecurringSchedulePicker from '../select/RecurringSchedulePicker';
 import { SelectedItemsButton } from '../table';
+import SimpleTransactionsTable from '../transactions/SimpleTransactionsTable';
 import { AmountInput, BetweenAmountInput } from '../util/AmountInput';
 import GenericInput from '../util/GenericInput';
 
@@ -81,7 +81,7 @@ export default function ScheduleDetails() {
   let { id, initialFields } = useParams();
   let adding = id == null;
   let payees = useCachedPayees({ idKey: true });
-  let history = useHistory();
+  let navigate = useNavigate();
   let globalDispatch = useDispatch();
   let dateFormat = useSelector(state => {
     return state.prefs.local.dateFormat || 'MM/dd/yyyy';
@@ -373,13 +373,13 @@ export default function ScheduleDetails() {
       dispatch({
         type: 'form-error',
         error:
-          'An error occurred while saving. Please contact help@actualbudget.com for support.',
+          'An error occurred while saving. Please visit https://actualbudget.org/contact/ for support.',
       });
     } else {
       if (adding) {
         await onLinkTransactions([...selectedInst.items], res.data);
       }
-      history.goBack();
+      navigate(-1);
     }
   }
 
@@ -769,7 +769,7 @@ export default function ScheduleDetails() {
         style={{ marginTop: 20 }}
       >
         {state.error && <Text style={{ color: colors.r4 }}>{state.error}</Text>}
-        <Button style={{ marginRight: 10 }} onClick={() => history.goBack()}>
+        <Button style={{ marginRight: 10 }} onClick={() => navigate(-1)}>
           Cancel
         </Button>
         <Button primary onClick={onSave}>

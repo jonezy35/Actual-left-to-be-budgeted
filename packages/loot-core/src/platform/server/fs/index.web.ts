@@ -9,19 +9,14 @@ import join from './path-join';
 
 let FS = null;
 let BFS = null;
-// let NO_PERSIST = process.env.IS_BETA === true;
 let NO_PERSIST = false;
 
 export const bundledDatabasePath = '/default-db.sqlite';
 export const migrationsPath = '/migrations';
 export const demoBudgetPath = '/demo-budget';
 export { join };
-export {
-  getDataDir,
-  getDocumentDir,
-  getBudgetDir,
-  _setDocumentDir,
-} from './index.electron';
+export { getDocumentDir, getBudgetDir, _setDocumentDir } from './shared';
+export const getDataDir = () => process.env.ACTUAL_DATA_DIR;
 
 export const pathToId = function (filepath) {
   return filepath.replace(/^\//, '').replace(/\//g, '-');

@@ -1,10 +1,10 @@
 import AdmZip from 'adm-zip';
+import { v4 as uuidv4 } from 'uuid';
 
 import * as asyncStorage from '../platform/server/asyncStorage';
 import { fetch } from '../platform/server/fetch';
 import * as fs from '../platform/server/fs';
 import * as sqlite from '../platform/server/sqlite';
-import * as uuid from '../platform/uuid';
 import * as monthUtils from '../shared/months';
 
 import * as encryption from './encryption';
@@ -20,6 +20,15 @@ import * as prefs from './prefs';
 import { getServer } from './server-config';
 
 let UPLOAD_FREQUENCY_IN_DAYS = 7;
+
+export interface RemoteFile {
+  deleted: boolean;
+  fileId: string;
+  groupId: string;
+  name: string;
+  encryptKeyId: string;
+  hasKey: boolean;
+}
 
 async function checkHTTPStatus(res) {
   if (res.status !== 200) {
@@ -37,7 +46,10 @@ async function fetchJSON(...args: Parameters<typeof fetch>) {
   return res.json();
 }
 
-export async function checkKey() {
+export async function checkKey(): Promise<{
+  valid: boolean;
+  error?: { reason: string };
+}> {
   let userToken = await asyncStorage.getItem('user-token');
 
   let { cloudFileId, encryptKeyId } = prefs.getPrefs();
@@ -50,7 +62,7 @@ export async function checkKey() {
     });
   } catch (e) {
     console.log(e);
-    return { error: { reason: 'network' } };
+    return { valid: false, error: { reason: 'network' } };
   }
 
   return {
@@ -66,10 +78,6 @@ export async function resetSyncState(newKeyState) {
   let userToken = await asyncStorage.getItem('user-token');
 
   let { cloudFileId } = prefs.getPrefs();
-
-  if (process.env.IS_BETA) {
-    return { error: { reason: 'beta-version' } };
-  }
 
   try {
     await post(getServer().SYNC_SERVER + '/reset-user-file', {
@@ -140,7 +148,8 @@ export async function exportBuffer() {
       `,
     );
 
-    let dbContent = sqlite.exportDatabase(memDb);
+    let dbContent = await sqlite.exportDatabase(memDb);
+
     sqlite.closeDatabase(memDb);
 
     // mark it as a file that needs a new clock so when a new client
@@ -223,11 +232,6 @@ export async function upload() {
     throw FileUploadError('unauthorized');
   }
 
-  // We never change the server from the beta version
-  if (process.env.IS_BETA) {
-    throw FileUploadError('beta-version');
-  }
-
   let zipContent = await exportBuffer();
   if (zipContent == null) {
     return;
@@ -254,7 +258,7 @@ export async function upload() {
   }
 
   if (!cloudFileId) {
-    cloudFileId = uuid.v4Sync();
+    cloudFileId = uuidv4();
   }
 
   let res;
@@ -326,7 +330,7 @@ export async function possiblyUpload() {
 }
 
 export async function removeFile(fileId) {
-  const [[, userToken]] = await asyncStorage.multiGet(['user-token']);
+  let userToken = await asyncStorage.getItem('user-token');
 
   await post(getServer().SYNC_SERVER + '/delete-user-file', {
     token: userToken,
@@ -334,7 +338,7 @@ export async function removeFile(fileId) {
   });
 }
 
-export async function listRemoteFiles() {
+export async function listRemoteFiles(): Promise<RemoteFile[] | null> {
   let userToken = await asyncStorage.getItem('user-token');
   if (!userToken) {
     return null;
@@ -348,11 +352,12 @@ export async function listRemoteFiles() {
       },
     });
   } catch (e) {
-    console.log('Error', e);
+    console.log('Unexpected error fetching file list from server', e);
     return null;
   }
 
   if (res.status === 'error') {
+    console.log('Error fetching file list from server', res);
     return null;
   }
 

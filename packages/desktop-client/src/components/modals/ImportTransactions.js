@@ -17,7 +17,7 @@ import {
   Text,
   Stack,
   Modal,
-  Select,
+  CustomSelect,
   Input,
   Button,
   ButtonWithLoading,
@@ -339,18 +339,16 @@ function SubLabel({ title }) {
 
 function SelectField({ width, style, options, value, onChange }) {
   return (
-    <Select
-      value={value}
-      style={style}
-      onChange={e => onChange(e.target.value)}
-    >
-      <option value="">Choose field...</option>
-      {options.map(x => (
-        <option key={x} value={x}>
-          {x}
-        </option>
-      ))}
-    </Select>
+    <CustomSelect
+      options={[
+        ['choose-field', 'Choose field...'],
+        ...options.map(option => [option, option]),
+      ]}
+      value={value === null ? 'choose-field' : value}
+      style={{ borderWidth: 1, width: '100%' }}
+      wrapperStyle={style}
+      onChange={value => onChange(value)}
+    />
   );
 }
 
@@ -374,16 +372,15 @@ function DateFormatSelect({
   return (
     <View style={{ width: 120 }}>
       <SectionLabel title="Date format" />
-      <Select
+      <CustomSelect
+        options={dateFormats.map(f => [
+          f.format,
+          f.label.replace(/ /g, delimiter),
+        ])}
         value={parseDateFormat || ''}
-        onChange={e => onChange(e.target.value)}
-      >
-        {dateFormats.map(f => (
-          <option key={f.format} value={f.format}>
-            {f.label.replace(/ /g, delimiter)}
-          </option>
-        ))}
-      </Select>
+        onChange={value => onChange(value)}
+        style={{ borderWidth: 1, width: '100%' }}
+      />
     </View>
   );
 }
@@ -465,12 +462,11 @@ function FieldMappings({ transactions, mappings, onChange, splitMode }) {
         spacing={1}
         style={{ marginTop: 5 }}
       >
-        <View style={{ width: 200 }}>
+        <View style={{ flex: 1 }}>
           <SubLabel title="Date" />
           <SelectField
-            width={200}
             options={options}
-            value={mappings.date || ''}
+            value={mappings.date}
             style={{ marginRight: 5 }}
             onChange={name => onChange('date', name)}
           />
@@ -478,9 +474,8 @@ function FieldMappings({ transactions, mappings, onChange, splitMode }) {
         <View style={{ flex: 1 }}>
           <SubLabel title="Payee" />
           <SelectField
-            width="flex"
             options={options}
-            value={mappings.payee || ''}
+            value={mappings.payee}
             style={{ marginRight: 5 }}
             onChange={name => onChange('payee', name)}
           />
@@ -488,41 +483,37 @@ function FieldMappings({ transactions, mappings, onChange, splitMode }) {
         <View style={{ flex: 1 }}>
           <SubLabel title="Notes" />
           <SelectField
-            width="flex"
             options={options}
-            value={mappings.notes || ''}
+            value={mappings.notes}
             style={{ marginRight: 5 }}
             onChange={name => onChange('notes', name)}
           />
         </View>
         {splitMode ? (
           <>
-            <View style={{ width: 90 }}>
+            <View style={{ flex: 0.5 }}>
               <SubLabel title="Outflow" />
               <SelectField
-                width={90}
                 options={options}
-                value={mappings.outflow || ''}
+                value={mappings.outflow}
                 onChange={name => onChange('outflow', name)}
               />
             </View>
-            <View style={{ width: 90 }}>
+            <View style={{ flex: 0.5 }}>
               <SubLabel title="Inflow" />
               <SelectField
-                width={90}
                 options={options}
-                value={mappings.inflow || ''}
+                value={mappings.inflow}
                 onChange={name => onChange('inflow', name)}
               />
             </View>
           </>
         ) : (
-          <View style={{ width: 90 }}>
+          <View style={{ flex: 1 }}>
             <SubLabel title="Amount" />
             <SelectField
-              width={90}
               options={options}
-              value={mappings.amount || ''}
+              value={mappings.amount}
               onChange={name => onChange('amount', name)}
             />
           </View>
@@ -546,7 +537,7 @@ function MultipliersField({ multiplierCB, value, onChange }) {
   );
 }
 
-export function ImportTransactions({
+function ImportTransactions({
   modalProps,
   options,
   dateFormat = 'MM/dd/yyyy',
@@ -555,7 +546,6 @@ export function ImportTransactions({
   importTransactions,
   getPayees,
   savePrefs,
-  addNotification,
 }) {
   let [multiplierAmount, setMultiplierAmount] = useState('');
   let [loadingState, setLoadingState] = useState('parsing');
@@ -587,67 +577,11 @@ export function ImportTransactions({
     setFilename(filename);
     setFileType(filetype);
 
-    let results = await parseTransactions(filename, options);
-    let errors, transactions;
+    let { errors, transactions } = await parseTransactions(filename, options);
     setLoadingState(null);
     setError(null);
 
     /// Do fine grained reporting between the old and new OFX importers.
-    if (results.ofxParser) {
-      if (results.which === 'both') {
-        // There were errors in the both parsers.
-        // Either a bad file, or a bug that must be fixed in the new!
-        // Show the new errors here.
-        console.log('Old errors: ', results.oldErrors);
-        console.log('New errors: ', results.newErrors);
-        errors = results.newErrors;
-        transactions = {};
-      } else if (results.which === 'old') {
-        // There were errors in the old, but not the new
-        // So the transactions here are from the new parser.
-        addNotification({
-          type: 'warning',
-          sticky: 'false',
-          message:
-            'Import was successful, but please [file a bug report](https://github.com/actualbudget/actual/issues/new?assignees=&labels=bug%2Cneeds+triage&template=bug-report.yml&title=%5BBug%5D%3A+New+OFX+Importer:+bad+old+parse:) and attach a redacted version of the file so we can fix our new algorithm.',
-        });
-        errors = [];
-        transactions = results.transactions;
-      } else if (results.which === 'new') {
-        // There were errors in the new, but not the old.
-        // So the transactions here are from the old parser.
-        // THIS IS A BUG AND SHOULD BE FIXED IN THE NEW PARSER!
-        addNotification({
-          type: 'warning',
-          sticky: 'false',
-          message:
-            'Import was successful, but please [file a bug report](https://github.com/actualbudget/actual/issues/new?assignees=&labels=bug%2Cneeds+triage&template=bug-report.yml&title=%5BBug%5D%3A+New+OFX+Importer:+bad+new+parse:) and attach a redacted version of the file so we can fix our new algorithm.',
-        });
-        errors = [];
-        transactions = results.transactions;
-      } else if (results.which === 'none') {
-        // Results were the same between the two!
-        errors = [];
-        transactions = results.transactions;
-      } else if (results.which === 'diff') {
-        // There was a difference in results between the two.
-        // use the old importer to be safe.
-        console.log('Different parse results');
-        console.log('Old OFX importer: ', results.oldTrans);
-        console.log('New OFX importer: ', results.newTrans);
-        addNotification({
-          type: 'warning',
-          sticky: 'false',
-          message:
-            'possible error importing file, please [file a bug report](https://github.com/actualbudget/actual/issues/new?assignees=&labels=bug%2Cneeds+triage&template=bug-report.yml&title=%5BBug%5D%3A+New+OFX+Importer:) and attach a redacted version of the file.',
-        });
-        transactions = results.oldTrans;
-        errors = [];
-      }
-    } else {
-      transactions = results.transactions;
-      errors = results.errors;
-    }
     if (errors.length > 0) {
       setError({
         parsed: true,
@@ -956,16 +890,18 @@ export function ImportTransactions({
               {filetype === 'csv' && (
                 <View style={{ marginLeft: 25 }}>
                   <SectionLabel title="CSV DELIMITER" />
-                  <Select
+                  <CustomSelect
+                    options={[
+                      [',', ','],
+                      [';', ';'],
+                    ]}
                     value={csvDelimiter}
-                    onChange={e => {
-                      setCsvDelimiter(e.target.value);
-                      parse(filename, { delimiter: e.target.value });
+                    onChange={value => {
+                      setCsvDelimiter(value);
+                      parse(filename, { delimiter: value });
                     }}
-                  >
-                    <option value=",">,</option>
-                    <option value=";">;</option>
-                  </Select>
+                    style={{ borderWidth: 1, width: '100%' }}
+                  />
                 </View>
               )}
             </View>

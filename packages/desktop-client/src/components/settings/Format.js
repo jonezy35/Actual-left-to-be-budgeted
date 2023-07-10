@@ -95,14 +95,14 @@ export default function FormatSettings({ prefs, savePrefs }) {
                   f.value,
                   prefs.hideFraction ? f.labelNoFraction : f.label,
                 ])}
-                style={{ padding: '5px 10px', fontSize: 15 }}
+                style={{ padding: '2px 10px', fontSize: 15 }}
               />
             </Button>
 
             <Text style={{ display: 'flex' }}>
               <Checkbox
                 id="settings-textDecimal"
-                checked={prefs.hideFraction}
+                checked={!!prefs.hideFraction}
                 onChange={onHideFraction}
               />
               <label htmlFor="settings-textDecimal">Hide decimal places</label>
@@ -115,7 +115,7 @@ export default function FormatSettings({ prefs, savePrefs }) {
                 value={dateFormat}
                 onChange={onDateFormat}
                 options={dateFormats.map(f => [f.value, f.label])}
-                style={{ padding: '5px 10px', fontSize: 15 }}
+                style={{ padding: '2px 10px', fontSize: 15 }}
               />
             </Button>
           </Column>
@@ -126,7 +126,7 @@ export default function FormatSettings({ prefs, savePrefs }) {
                 value={firstDayOfWeekIdx}
                 onChange={onFirstDayOfWeek}
                 options={daysOfWeek.map(f => [f.value, f.label])}
-                style={{ padding: '5px 10px', fontSize: 15 }}
+                style={{ padding: '2px 10px', fontSize: 15 }}
               />
             </Button>
           </Column>

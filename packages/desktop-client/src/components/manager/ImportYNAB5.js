@@ -20,7 +20,7 @@ function getErrorMessage(error) {
     case 'not-ynab5':
       return 'This file is not valid. Please select a JSON file exported from nYNAB.';
     default:
-      return 'An unknown error occurred while importing. Sorry! We have been notified of this issue.';
+      return 'An unknown error occurred while importing. Please report this as a new issue on Github.';
   }
 }
 
@@ -61,11 +61,7 @@ function Import({ modalProps, availableImports }) {
             style={{ alignItems: 'center', '& > div': { lineHeight: '1.7em' } }}
           >
             <P>
-              <ExternalLink
-                asAnchor={true}
-                href="https://actualbudget.github.io/docs/Getting-Started/migration/nynab"
-                target="_blank"
-              >
+              <ExternalLink to="https://actualbudget.org/docs/migration/nynab">
                 Read here
               </ExternalLink>{' '}
               for instructions on how to migrate your data from YNAB. You need

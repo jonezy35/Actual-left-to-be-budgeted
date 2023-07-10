@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { connect } from 'react-redux';
+import { useParams } from 'react-router-dom';
 
 import * as actions from 'loot-core/src/client/actions';
 
 import ExclamationOutline from '../../icons/v1/ExclamationOutline';
 import { authorizeBank } from '../../nordigen';
 import { colors } from '../../style';
-import { View, Button, Tooltip } from '../common';
+import { View, Button, Tooltip, ExternalLink } from '../common';
 
 function getErrorMessage(type, code) {
   switch (type.toUpperCase()) {
@@ -37,30 +38,21 @@ function getErrorMessage(type, code) {
   return (
     <>
       An internal error occurred. Try to login again, or get{' '}
-      <a
-        href="https://actualbudget.github.io/docs/Contact/"
-        target="_blank"
-        rel="noopener noreferrer"
-      >
+      <ExternalLink to="https://actualbudget.org/contact/">
         in touch
-      </a>{' '}
+      </ExternalLink>{' '}
       for support.
     </>
   );
 }
 
 function AccountSyncCheck({
-  id,
   accounts,
   failedAccounts,
-  syncAndDownload,
-  markAccountSuccess,
   unlinkAccount,
   pushModal,
-  closeModal,
-  getAccounts,
-  addNotification,
 }) {
+  let { id } = useParams();
   let [open, setOpen] = useState(false);
   if (!failedAccounts) {
     return null;

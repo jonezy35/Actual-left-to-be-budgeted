@@ -1,16 +1,17 @@
+import { Timestamp } from '@actual-app/crdt';
+
 import * as connection from '../platform/server/connection';
 import { getIn } from '../shared/util';
 
-import { Timestamp } from './crdt';
 import { withMutatorContext, getMutatorContext } from './mutators';
-import { sendMessages } from './sync';
+import { Message, sendMessages } from './sync';
 
 // A marker always sits as the first entry to simplify logic
-type MarkerMessage = { type: 'marker'; meta? };
+type MarkerMessage = { type: 'marker'; meta?: unknown };
 type MessagesMessage = {
   type: 'messages';
   messages: unknown[];
-  meta?;
+  meta?: unknown;
   oldData;
   undoTag;
 };
@@ -55,7 +56,10 @@ export function clearUndo() {
   CURSOR = 0;
 }
 
-export function withUndo(func, meta?) {
+export function withUndo<T>(
+  func: () => Promise<T>,
+  meta?: unknown,
+): Promise<T> {
   let context = getMutatorContext();
   if (context.undoDisabled || context.undoListening) {
     return func();
@@ -63,7 +67,7 @@ export function withUndo(func, meta?) {
 
   MESSAGE_HISTORY = MESSAGE_HISTORY.slice(0, CURSOR + 1);
 
-  let marker = { type: 'marker' as const, meta };
+  let marker: MarkerMessage = { type: 'marker', meta };
 
   if (MESSAGE_HISTORY[MESSAGE_HISTORY.length - 1].type === 'marker') {
     MESSAGE_HISTORY[MESSAGE_HISTORY.length - 1] = marker;
@@ -78,8 +82,16 @@ export function withUndo(func, meta?) {
   );
 }
 
-export function undoable(func) {
-  return (...args) => {
+// for some reason `void` is not inferred properly without this overload
+export function undoable<Args extends unknown[]>(
+  func: (...args: Args) => Promise<void>,
+): (...args: Args) => Promise<void>;
+export function undoable<
+  Args extends unknown[],
+  Return extends Promise<unknown>,
+>(func: (...args: Args) => Return): (...args: Args) => Return;
+export function undoable(func: (...args: unknown[]) => Promise<unknown>) {
+  return (...args: unknown[]) => {
     return withUndo(() => {
       return func(...args);
     });
@@ -216,7 +228,7 @@ export async function redo() {
   }
 }
 
-function redoResurrections(messages, oldData) {
+function redoResurrections(messages, oldData): Message[] {
   let resurrect = new Set<string>();
 
   messages.forEach(message => {

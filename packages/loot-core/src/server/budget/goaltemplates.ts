@@ -1,11 +1,3 @@
-import {
-  differenceInCalendarMonths,
-  addMonths,
-  addWeeks,
-  format,
-  addMinutes,
-} from 'date-fns';
-
 import * as monthUtils from '../../shared/months';
 import {
   extractScheduleConds,
@@ -26,6 +18,10 @@ export function overwriteTemplate({ month }) {
   return processTemplate(month, true);
 }
 
+export function runCheckTemplates() {
+  return checkTemplates();
+}
+
 function checkScheduleTemplates(template) {
   let lowPriority = template[0].priority;
   let errorNotice = false;
@@ -36,12 +32,6 @@ function checkScheduleTemplates(template) {
     }
   }
   return { lowPriority, errorNotice };
-}
-
-function getCorrectedDate(dateString) {
-  let newDate = new Date(dateString);
-  newDate = addMinutes(newDate, newDate.getTimezoneOffset());
-  return newDate;
 }
 
 async function processTemplate(month, force) {
@@ -80,8 +70,36 @@ async function processTemplate(month, force) {
       });
     }
   }
+  // find all remainder templates, place them after all other templates
+  let remainder_found;
+  let remainder_priority = lowestPriority + 1;
+  let remainder_weight_total = 0;
+  for (let c = 0; c < categories.length; c++) {
+    let category = categories[c];
+    let templates = category_templates[category.id];
+    if (templates) {
+      for (let i = 0; i < templates.length; i++) {
+        if (templates[i].type === 'remainder') {
+          templates[i].priority = remainder_priority;
+          remainder_weight_total += templates[i].weight;
+          remainder_found = true;
+        }
+      }
+    }
+  }
+  // so the remainders don't get skiped
+  if (remainder_found) lowestPriority = remainder_priority;
 
+  let sheetName = monthUtils.sheetForMonth(month);
+  let available_start = await getSheetValue(sheetName, `to-budget`);
   for (let priority = 0; priority <= lowestPriority; priority++) {
+    // setup scaling for remainder
+    let remainder_scale = 1;
+    if (priority === lowestPriority) {
+      let available_now = await getSheetValue(sheetName, `to-budget`);
+      remainder_scale = Math.round(available_now / remainder_weight_total);
+    }
+
     for (let c = 0; c < categories.length; c++) {
       let category = categories[c];
       let template = category_templates[category.id];
@@ -132,6 +150,8 @@ async function processTemplate(month, force) {
                 template,
                 month,
                 priority,
+                remainder_scale,
+                available_start,
                 force,
               );
             if (to_budget != null) {
@@ -183,9 +203,7 @@ async function processTemplate(month, force) {
       return { type: 'message', message: 'All categories were up to date.' };
     }
   } else {
-    let applied = `Successfully applied templates to ${num_applied} ${
-      num_applied === 1 ? 'category' : 'categories'
-    }.`;
+    let applied = `Successfully applied ${num_applied} templates.`;
     if (errors.length) {
       return {
         sticky: true,
@@ -235,9 +253,11 @@ async function applyCategoryTemplate(
   template_lines,
   month,
   priority,
+  remainder_scale,
+  available_start,
   force,
 ) {
-  let current_month = getCorrectedDate(`${month}-01`);
+  let current_month = `${month}-01`;
   let errors = [];
   let all_schedule_names = await db.all(
     'SELECT name from schedules WHERE name NOT NULL AND tombstone = 0',
@@ -249,8 +269,8 @@ async function applyCategoryTemplate(
     switch (template.type) {
       case 'by':
       case 'spend':
-        let target_month = getCorrectedDate(`${template.month}-01`);
-        let num_months = differenceInCalendarMonths(
+        let target_month = `${template.month}-01`;
+        let num_months = monthUtils.differenceInCalendarMonths(
           target_month,
           current_month,
         );
@@ -260,22 +280,25 @@ async function applyCategoryTemplate(
 
         let spend_from;
         if (template.type === 'spend') {
-          spend_from = getCorrectedDate(`${template.from}-01`);
+          spend_from = `${template.from}-01`;
         }
         while (num_months < 0 && repeat) {
-          target_month = addMonths(target_month, repeat);
+          target_month = monthUtils.addMonths(target_month, repeat);
           if (spend_from) {
-            spend_from = addMonths(spend_from, repeat);
+            spend_from = monthUtils.addMonths(spend_from, repeat);
           }
-          num_months = differenceInCalendarMonths(target_month, current_month);
+          num_months = monthUtils.differenceInCalendarMonths(
+            target_month,
+            current_month,
+          );
         }
         if (num_months < 0) {
           errors.push(`${template.month} is in the past.`);
           return false;
         }
-        template.month = format(target_month, 'yyyy-MM');
+        template.month = monthUtils.format(target_month, 'yyyy-MM');
         if (spend_from) {
-          template.from = format(spend_from, 'yyyy-MM');
+          template.from = monthUtils.format(spend_from, 'yyyy-MM');
         }
         break;
       case 'schedule':
@@ -292,9 +315,9 @@ async function applyCategoryTemplate(
   if (template_lines.length > 1) {
     template_lines = template_lines.sort((a, b) => {
       if (a.type === 'by' && !a.annual) {
-        return differenceInCalendarMonths(
-          getCorrectedDate(`${a.month}-01`),
-          getCorrectedDate(`${b.month}-01`),
+        return monthUtils.differenceInCalendarMonths(
+          `${a.month}-01`,
+          `${b.month}-01`,
         );
       } else {
         return a.type.localeCompare(b.type);
@@ -344,8 +367,8 @@ async function applyCategoryTemplate(
       case 'by': {
         // by has 'amount' and 'month' params
         let target = 0;
-        let target_month = getCorrectedDate(`${template_lines[l].month}-01`);
-        let num_months = differenceInCalendarMonths(
+        let target_month = `${template_lines[l].month}-01`;
+        let num_months = monthUtils.differenceInCalendarMonths(
           target_month,
           current_month,
         );
@@ -354,9 +377,9 @@ async function applyCategoryTemplate(
             ? template.repeat
             : (template.repeat || 1) * 12;
         while (num_months < 0 && repeat) {
-          target_month = addMonths(target_month, repeat);
-          num_months = differenceInCalendarMonths(
-            template_lines[l],
+          target_month = monthUtils.addMonths(target_month, repeat);
+          num_months = monthUtils.differenceInCalendarMonths(
+            template_lines[l].month,
             current_month,
           );
         }
@@ -393,11 +416,11 @@ async function applyCategoryTemplate(
             hold = template.limit.hold;
           }
         }
-        let w = getCorrectedDate(template.starting);
-        let next_month = addMonths(current_month, 1);
+        let w = template.starting;
+        let next_month = monthUtils.addMonths(current_month, 1);
 
-        while (w.getTime() < next_month.getTime()) {
-          if (w.getTime() >= current_month.getTime()) {
+        while (w < next_month) {
+          if (w >= current_month) {
             if (to_budget + amount < budgetAvailable || !priority) {
               to_budget += amount;
             } else {
@@ -405,22 +428,24 @@ async function applyCategoryTemplate(
               errors.push(`Insufficient funds.`);
             }
           }
-          w = addWeeks(w, weeks);
+          w = monthUtils.addWeeks(w, weeks);
         }
         break;
       }
       case 'spend': {
         // spend has 'amount' and 'from' and 'month' params
-        let from_month = getCorrectedDate(`${template.from}-01`);
-        let to_month = getCorrectedDate(`${template.month}-01`);
+        let from_month = `${template.from}-01`;
+        let to_month = `${template.month}-01`;
         let already_budgeted = last_month_balance;
         let first_month = true;
         for (
           let m = from_month;
-          differenceInCalendarMonths(current_month, m) > 0;
-          m = addMonths(m, 1)
+          monthUtils.differenceInCalendarMonths(current_month, m) > 0;
+          m = monthUtils.addMonths(m, 1)
         ) {
-          let sheetName = monthUtils.sheetForMonth(format(m, 'yyyy-MM'));
+          let sheetName = monthUtils.sheetForMonth(
+            monthUtils.format(m, 'yyyy-MM'),
+          );
 
           if (first_month) {
             let spent = await getSheetValue(
@@ -441,7 +466,10 @@ async function applyCategoryTemplate(
             already_budgeted += budgeted;
           }
         }
-        let num_months = differenceInCalendarMonths(to_month, current_month);
+        let num_months = monthUtils.differenceInCalendarMonths(
+          to_month,
+          monthUtils._parse(current_month),
+        );
         let target = amountToInteger(template.amount);
 
         let increment = 0;
@@ -468,6 +496,8 @@ async function applyCategoryTemplate(
         let monthlyIncome = 0;
         if (template.category.toLowerCase() === 'all income') {
           monthlyIncome = await getSheetValue(sheetName, `total-income`);
+        } else if (template.category.toLowerCase() === 'available funds') {
+          monthlyIncome = available_start;
         } else {
           let income_category = (await db.getCategories()).find(
             c =>
@@ -504,11 +534,34 @@ async function applyCategoryTemplate(
         let conditions = rule.serialize().conditions;
         let { date: dateCond, amount: amountCond } =
           extractScheduleConds(conditions);
-        let next_date_string = getNextDate(dateCond, current_month);
-        let num_months = differenceInCalendarMonths(
-          getCorrectedDate(next_date_string),
+        let next_date_string = getNextDate(
+          dateCond,
+          monthUtils._parse(current_month),
+        );
+
+        let isRepeating =
+          Object(dateCond.value) === dateCond.value &&
+          'frequency' in dateCond.value;
+
+        let num_months = monthUtils.differenceInCalendarMonths(
+          next_date_string,
           current_month,
         );
+
+        if (isRepeating) {
+          let monthlyTarget = 0;
+          let next_month = monthUtils.addMonths(current_month, num_months + 1);
+          let next_date = getNextDate(
+            dateCond,
+            monthUtils._parse(current_month),
+          );
+          while (next_date < next_month) {
+            monthlyTarget += amountCond.value;
+            next_date = monthUtils.addDays(next_date, 1);
+            next_date = getNextDate(dateCond, monthUtils._parse(next_date));
+          }
+          amountCond.value = monthlyTarget;
+        }
 
         if (template.full === true) {
           if (num_months === 1) {
@@ -541,11 +594,18 @@ async function applyCategoryTemplate(
             !priority
           ) {
             to_budget += diff;
+            if (l === template_lines.length - 1) to_budget -= spent;
           } else {
             if (budgetAvailable > 0) to_budget = budgetAvailable;
             errors.push(`Insufficient funds.`);
           }
         }
+        break;
+      }
+      case 'remainder': {
+        to_budget = Math.round(remainder_scale * template.weight);
+        // can over budget with the rounding, so checking that
+        if (to_budget > budgetAvailable) to_budget = budgetAvailable;
         break;
       }
       case 'error':
@@ -579,5 +639,40 @@ async function applyCategoryTemplate(
     str += ' ' + template_lines.map(x => x.line).join('\n');
     console.log(str);
     return { amount: to_budget, errors };
+  }
+}
+
+async function checkTemplates() {
+  let category_templates = await getCategoryTemplates();
+  let errors = [];
+
+  let categories = await db.all(
+    'SELECT * FROM v_categories WHERE tombstone = 0',
+  );
+
+  // run through each line and see if its an error
+  for (let c = 0; c < categories.length; c++) {
+    let category = categories[c];
+    let template = category_templates[category.id];
+    if (template) {
+      for (let l = 0; l < template.length; l++) {
+        if (template[l].type === 'error') {
+          //return { type: 'message', message: "found a bad one",};
+          errors.push(category.name + ': ' + template[l].line);
+        }
+      }
+    }
+  }
+  if (errors.length) {
+    return {
+      sticky: true,
+      message: `There were errors interpreting some templates:`,
+      pre: errors.join('\n\n'),
+    };
+  } else {
+    return {
+      type: 'message',
+      message: 'All templates passed! 🎉',
+    };
   }
 }
